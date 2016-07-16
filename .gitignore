@@ -1,0 +1,7 @@
+# update scripts
+upload.sh
+upload.log
+date.log
+
+# node.js tmp files
+node_modules
