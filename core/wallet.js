@@ -16,6 +16,7 @@ var err		= require("./err.js");
 var util	= require("./util.js");
 var crypto	= require("./crypto.js");
 var date	= require("./date.js");
+var user	= require("./user.js");
 
 function getTransID(trans) {
 	return crypto.hmac(
@@ -61,7 +62,8 @@ exports.Transaction = function (amt, payer, payee, book_id, descr, event) {
 				  // 1: add to trans_lst
 				  // 2: payer.balance-- & payer add log & book push
 				  // 3: payee.balance++ & payee add log & book pull
-				  // 4: finish -> call event["success"]
+				  // 4: update trans log list
+				  // 5: finish -> call event["success"]
 		event: event
 	};
 
@@ -164,6 +166,7 @@ function trans_state4(env, trans, trans_lst, col) {
 	trans.state = 4;
 	trans_lst.findOneAndUpdate({ id: trans.id }, { $set: { "state": trans.state } },
 		err.callback(env, function (res) {
+			trans.state = 5;
 			if (res.value) {
 				finishTransac(env, trans);
 			} else {
@@ -200,6 +203,7 @@ function trans_state3(env, trans, trans_lst, col) {
 					{ login: trans.payee },
 					update_log,
 					err.callback(env, function (res) {
+						// trans.state = 4;
 						if (res.value)
 							trans_state4(env, trans, trans_lst, col);
 						else
@@ -242,12 +246,13 @@ function trans_state2(env, trans, trans_lst, col) {
 						$push: push_log
 					}, { returnOriginal: false },
 					err.callback(env, function (res) {
+						trans.state = 3; // has finished
 						if (res.value) {
-							if (res.value.wallet.balance >= 0) {
+							if (res.value.wallet.balance >= 0 ||
+								res.value.level <= user.levels.repo) {
 								trans_state3(env, trans, trans_lst, col);
 							} else {
 								// not enough balance
-								trans.state = 3; // has finished
 								revertTransac(env, trans, "not_enough_balance", trans_lst, col);
 							}
 						} else {
@@ -289,7 +294,10 @@ function trans_state1(env, trans, trans_lst) {
 exports.applyTransac = function (env, trans) {
 	// basic check on transaction
 
-	if (typeof trans.amt == "number" && trans.amt <= 0) {
+	if (typeof trans.amt != "number" ||
+		trans.amt <= 0 ||
+		isNaN(trans.amt) ||
+		trans.amt >= err.max_accr_amt) {
 		return revertTransac(env, trans, "illegal_trans_amount");
 	}
 

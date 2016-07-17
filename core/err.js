@@ -30,11 +30,13 @@ exports.code = {
 		"looks like the book is owned by not only one person, which is wierd. please contact the administrator if you are seeing this."
 	),
 	book_not_priv:					errmsg("this book is not your private book"),
-	server_busy:					errmsg("server busy. please try a few sec later")
+	server_busy:					errmsg("server busy. please try a few sec later"),
+	book_has_own:					errmsg("the book has been owned by someone")
 };
 
 exports.debug = true;
 exports.session_timeout = 6000000; // 6000 sec
+exports.max_accr_amt = 4503599627370496; // (2 << 51), max_double / 2
 
 /*
 	pop message and write error to response

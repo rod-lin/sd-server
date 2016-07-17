@@ -296,29 +296,23 @@ exports.IChangeLevel = function (env, arg) {
 }
 
 function applyBookTrans(env, payer, payee, book) {
-	return bookm.lockBook(env, book._id, function (env, book) {
-		return wallet.applyTransac(
-			env, wallet.Transaction(
-				book.value,
-				payer, payee, book._id,
-				"book purchase",
-				{
-					success: function (env, trans) {
-						bookm.unlockBook(env, book._id, function (env) {
-							env.sendValue(trans);
-						});
-						return;
-					},
-					failed: function (env, trans, errno) {
-						bookm.unlockBook(env, book._id, function (env) {
-							err.poperr(env, errno || "unable_finish_trans");
-						});
-						return;
-					}
+	return wallet.applyTransac(
+		env, wallet.Transaction(
+			book.value,
+			payer, payee, book._id,
+			"book purchase",
+			{
+				success: function (env, trans) {
+					env.sendValue(trans);
+					return;
+				},
+				failed: function (env, trans, errno) {
+					err.poperr(env, errno || "unable_finish_trans");
+					return;
 				}
-			)
-		);
-	});
+			}
+		)
+	);
 }
 
 // buy book
@@ -330,34 +324,24 @@ exports.IBuyBook = function (env, arg) {
 	var book_id = parseInt(arg.book);
 
 	return exports.login(env, function (user, col) {
-		col.find(
-			{ "public": { $in: [ book_id ] } }
-		).toArray(err.callback(env, function (res) {
-			if (res.length) {
-				if (res.length == 1) {
-					var owner = res[0];
-					// TODO: probably not thread-safe
-					db.col(env, db.const.book_tab, err.callback(env,
-						function (col) {
-							col.find({ _id: book_id }).toArray(
-								err.callback(env, function (arr) {
-									if (arr.length) {
-										applyBookTrans(env, user.login, owner.login, arr[0]);
-									} else {
-										err.poperr(env, "book_not_exist");
-									}
-								})
-							);
-						}
-					));
+		bookm.lockBook(env, book_id, function (env, book) {
+			col.find(
+				{ "public": { $in: [ book_id ] } }
+			).toArray(err.callback(env, function (res) {
+				if (res.length) {
+					if (res.length == 1) {
+						var owner = res[0];
+						// TODO: probably not thread-safe
+						applyBookTrans(env, user.login, owner.login, book);
+					} else {
+						env.crush("multi-book-ownership", res);
+						err.poperr(env, "multi_ownership");
+					}
 				} else {
-					env.crush("multi-book-ownership", res);
-					err.poperr(env, "multi_ownership");
+					err.poperr(env, "book_not_pub");
 				}
-			} else {
-				err.poperr(env, "book_not_pub");
-			}
-		}));
+			}));
+		});
 	});
 }
 
@@ -370,8 +354,8 @@ exports.IPutOnSale = function (env, arg) {
 	var book_id = parseInt(arg.book);
 
 	return exports.login(env, function (user, col) {
-		if (user.private.indexOf(book_id) != -1) {
-			bookm.lockBook(env, book_id, function (env, book) {
+		bookm.lockBook(env, book_id, function (env, book) {
+			if (user.private.indexOf(book_id) != -1) {
 				col.findOneAndUpdate(
 					{ login: user.login },
 					{
@@ -379,19 +363,13 @@ exports.IPutOnSale = function (env, arg) {
 						$pull: { private: book_id }
 					},
 					err.callback(env, function () {
-						bookm.unlockBook(env, book_id, function (env) {
-							env.sendValue(null);
-						});
-					}, function (next) {
-						bookm.unlockBook(env, book_id, function (env) {
-							next();
-						});
+						env.sendValue(null);
 					})
 				);
-			});
-		} else {
-			err.poperr(env, "book_not_priv");
-		}
+			} else {
+				err.poperr(env, "book_not_priv");
+			}
+		});
 	});
 }
 
@@ -404,8 +382,8 @@ exports.IRemovePubBook = function (env, arg) {
 	var book_id = parseInt(arg.book);
 
 	return exports.login(env, function (user, col) {
-		if (user.public.indexOf(book_id) != -1) {
-			bookm.lockBook(env, book_id, function (env, book) {
+		bookm.lockBook(env, book_id, function (env, book) {
+			if (user.public.indexOf(book_id) != -1) {
 				col.findOneAndUpdate(
 					{ login: user.login },
 					{
@@ -413,18 +391,68 @@ exports.IRemovePubBook = function (env, arg) {
 						$push: { private: book_id }
 					},
 					err.callback(env, function () {
-						bookm.unlockBook(env, book_id, function (env) {
-							env.sendValue(null);
-						});
+						env.sendValue(null);
 					}, function () {
-						bookm.unlockBook(env, book_id, function (env) {
-							next();
-						});
+						next();
+					})
+				);
+			} else {
+				err.poperr(env, "book_not_pub");
+			}
+		});
+	});
+}
+
+exports.IAssignBook = function (env, arg) {
+	if (!util.checkArg(env, arg, [ "book", "to" ])) {
+		return;
+	}
+
+	var book_id = parseInt(arg.book);
+
+	switch (arg.list) {
+		case "public":
+		case "private": break;
+		default:
+			arg.list = "private";
+	}
+
+	return exports.login(env, function (user, col) {
+		if (user.level <= levels.repo) {
+			bookm.lockBook(env, book_id, function (env, book) {
+				col.count(
+					{
+						$or: [
+							{ private: { $in: [ book_id ] } },
+							{ public: { $in: [ book_id ] } }
+						]
+					},
+					err.callback(env, function (count) {
+						if (!count) {
+							var update_log = {
+								$push: { }
+							};
+							update_log.$push[arg.list] = book_id;
+
+							col.findOneAndUpdate(
+								{ login: arg.to },
+								update_log,
+								err.callback(env, function (res) {
+									if (res.value) {
+										env.sendValue(null);
+									} else {
+										err.poperr(env, "user_not_exist");
+									}
+								})
+							);
+						} else {
+							err.poperr(env, "book_has_own");
+						}
 					})
 				);
 			});
 		} else {
-			err.poperr(env, "book_not_pub");
+			err.poperr(env, "no_auth");
 		}
 	});
 }

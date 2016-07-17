@@ -36,7 +36,7 @@ exports.IAddBook = function (env, arg) {
 			col.insert(
 				exports.Book(id, arg.name, arg.value),
 				err.callback(env, function () {
-					env.sendValue(null);
+					env.sendValue(id);
 				})
 			);
 		});
@@ -46,14 +46,24 @@ exports.IAddBook = function (env, arg) {
 // make sure id exist
 exports.lockBook = function (env, id, proc) {
 	return db.col(env, db.const.book_tab, err.callback(env, function (col) {
-		col.findOneAndUpdate(
-			{ _id: id, locked: false },
-			{ $set: { locked: true } },
+		col.findOne(
+			{ _id: id },
 			err.callback(env, function (res) {
-				if (res.value) {
-					proc(env, res.value)
+				if (res) {
+					col.findOneAndUpdate(
+						{ _id: id, locked: false },
+						{ $set: { locked: true } },
+						err.callback(env, function (res) {
+							if (res.value) {
+								env.addLockedBook(id);
+								proc(env, res.value)
+							} else {
+								err.poperr(env, "server_busy");
+							}
+						})
+					);
 				} else {
-					err.poperr(env, "server_busy");
+					err.poperr(env, "book_not_exist");
 				}
 			})
 		);
@@ -66,7 +76,7 @@ exports.unlockBook = function (env, id, proc) {
 			{ _id: id },
 			{ $set: { locked: false } },
 			err.callback(env, function (res) {
-				proc(env);
+				proc && proc(env);
 			})
 		);
 	}));

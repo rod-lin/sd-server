@@ -3,10 +3,10 @@
  */
 
 var date	= require("./date.js");
+var bookm	= require('./book.js');
 
 var common_header = {
-	"Content-Type": "text/json",
-	"charset": "utf-8"
+	"Content-Type": "text/json;charset=UTF-8"
 };
 
 exports.Env = function (id, req, resp) {
@@ -26,6 +26,7 @@ exports.Env = function (id, req, resp) {
 		cookie: cookie,
 		buffer: [],
 		connect: [],
+		locked_book: [],
 		closeAllDB: function () {
 			// TODO: probably need to close db with a little bit delay
 			// to temporarily cover some possible bugs in which the response is ended before
@@ -118,9 +119,25 @@ exports.Env = function (id, req, resp) {
 
 			return;
 		},
+		addLockedBook: function (id) {
+			this.locked_book.push(id);
+			return;
+		},
+		unlockAllBook: function (callback) {
+			var ids = this.locked_book;
+			
+			for (var i = 0; i < ids.length; i++) {
+				bookm.unlockBook(this, ids[i], callback);
+			}
+
+			return;
+		},
 		clean: function () {
-			this.closeAllDB();
-			this.connect = [];
+			env = this;
+			this.unlockAllBook(function () {
+				env.closeAllDB();
+				env.connect = [];
+			});
 			return;
 		}
 	};
