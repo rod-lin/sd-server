@@ -53,12 +53,12 @@ exports.Env = function (id, req, resp) {
 			this.endResponse();
 			return;
 		},
-		sendError: function (msg) {
+		sendError: function (msg, status) {
 			this.writeRaw(JSON.stringify({
 				status: false,
 				value: msg
 			}));
-			this.endResponse();
+			this.endResponse(status || 200);
 			return;
 		},
 		remote: function () {

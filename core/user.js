@@ -5,6 +5,7 @@ var wallet	= require("./wallet.js");
 var util	= require("./util.js");
 var crypto	= require('./crypto.js');
 var bookm	= require('./book.js');
+var Env		= require('./env.js').Env;
 
 var SD_SESSIONID_KEY = "_sd_session";
 
@@ -14,6 +15,20 @@ function encryptPass(n, p) {
 
 function getSessionID(name, time) {
 	return crypto.hmac("md5", crypto.md5(time.toString()), crypto.sha1(name));
+}
+
+function getActionID() {
+	return crypto.hmac("md5",
+		crypto.sha1(date.getTimeStamp().toString()),
+		crypto.md5((Math.random() << 10).toString())
+	);
+}
+
+function getRandomString(length) {
+	return crypto.hmac("md5",
+		crypto.md5((Math.random() << 10).toString()),
+		crypto.sha1(date.getTimeStamp().toString())
+	).substring(0, length);
 }
 
 /*
@@ -188,6 +203,70 @@ exports.login = function (env, callback, session_id) {
 	);
 }
 
+if (!global.action_callback)
+	global.action_callback = [];
+
+// find empty cell and push in(return index)
+// TODO: probably a little slow?
+function pushEmpty(arr, val) {
+	for (var i = 0; i < arr.length; i++) {
+		if (!arr[i]) {
+			arr[i] = val;
+			return i;
+		}
+	}
+
+	return arr.push(val) - 1;
+}
+
+// similar to login, but involves secondary confirm
+// callback(new_env, user, col) {}
+exports.login_s = function (env, callback, session_id) {
+	// session verify first
+	return exports.login(env, function (user, col) {
+		db.col(env, db.const.action_tab,
+			err.callback(env, function (col) {
+				// create pending action
+				var id = getActionID();
+				var confirm = getRandomString(16);
+				var clear_cb = function () {
+					// remove when timeout
+					var tmp = Env(env.id);
+					db.col(tmp, db.const.action_tab, err.callback(tmp, function (col) {
+						col.findOneAndDelete({ action_id: id }, err.callback(tmp, function () {
+							// empty for new callbacks
+							global.action_callback[cb_id] = null;
+							tmp.sendValue(null);
+						}));
+					}));
+				};
+				var proc = setTimeout(clear_cb, err.action_timeout);
+
+				var cb_id = pushEmpty(global.action_callback, {
+					clear: clear_cb,
+					proc: proc,
+					callback: callback
+				});
+
+				col.insert(
+					{
+						action_id: id,
+						confirm: confirm,
+						callback: cb_id
+						// need 3 arg: env, user, col
+					}, { serializeFunctions: true },
+					err.callback(env, function (res) {
+						env.sendValue({
+							id: id,
+							check: crypto.aes_enc(confirm, user.passwd)
+						});
+					})
+				);
+			})
+		);
+	}, session_id);
+}
+
 exports.IChangeName = function (env, arg) {
 	if (!util.checkArg(env, arg, [ "new" ])) {
 		return;
@@ -323,7 +402,7 @@ exports.IBuyBook = function (env, arg) {
 
 	var book_id = parseInt(arg.book);
 
-	return exports.login(env, function (user, col) {
+	return exports.login_s(env, function (env, user, col) {
 		bookm.lockBook(env, book_id, function (env, book) {
 			col.find(
 				{ "public": { $in: [ book_id ] } }
@@ -454,5 +533,54 @@ exports.IAssignBook = function (env, arg) {
 		} else {
 			err.poperr(env, "no_auth");
 		}
+	});
+}
+
+exports.IConfirmAction = function (env, arg) {
+	if (!util.checkArg(env, arg, [ "id", "confirm" ])) {
+		return;
+	}
+
+	return db.col(env, db.const.action_tab,
+		err.callback(env, function (col) {
+			col.find({ action_id: arg.id })
+			.toArray(err.callback(env, function (arr) {
+				if (arr.length) {
+					var action = arr[0];
+					exports.login(env, function (user, col) {
+						if (action.confirm == arg.confirm) {
+							// confirmed -> call back
+							var cb = global.action_callback[action.callback];
+
+							clearTimeout(cb.proc);
+							cb.clear(); // remove action and callback
+
+							return cb.callback(env, user, col);
+						} else {
+							err.poperr(env, "failed_confirm");
+						}
+					});
+				} else {
+					err.poperr(env, "action_not_exist");
+				}
+			}));
+		})
+	);
+}
+
+exports.IPasswordConfirm = function (env, arg) {
+	if (!util.checkArg(env, arg, [ "id", "check", "passwd" ])) {
+		return;
+	}
+
+	return exports.login(env, function (user, col) {
+		var confirm = crypto.aes_dec(arg.check, encryptPass(user.login, arg.passwd));
+
+		if (!confirm) {
+			err.poperr(env, "wrong_passwd");
+			return;
+		}
+
+		return exports.IConfirmAction(env, { id: arg.id, confirm: confirm });
 	});
 }

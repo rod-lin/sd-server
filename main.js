@@ -18,6 +18,8 @@ var ifs = {
 	"onsale": user.IPutOnSale,
 	"withdraw": user.IRemovePubBook,
 	"assign": user.IAssignBook,
+	"confirm": user.IConfirmAction,
+	"pcheck": user.IPasswordConfirm, // for test
 	"bookadd": book.IAddBook
 };
 
@@ -39,8 +41,7 @@ exports.requestHandler = function (request, response) {
 				env.log("interface handler " + ifname + " triggered");
 				ifs[ifname](env, args);
 			} else {
-				env.writeRaw("cannot reach " + parsed.pathname);
-				env.endResponse(404);
+				env.sendError(err.code.no_interface, 404);
 			}
 		}
 	);

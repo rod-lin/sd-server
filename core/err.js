@@ -8,6 +8,7 @@ function errmsg(msg) {
 }
 
 exports.code = {
+	no_interface:					errmsg("interface not found"),
 	user_exists:					errmsg("user exists"),
 	failed_connect_db:				errmsg("failed to connect database"),
 	failed_get_col:					errmsg("failed to obtain collection"),
@@ -31,12 +32,16 @@ exports.code = {
 	),
 	book_not_priv:					errmsg("this book is not your private book"),
 	server_busy:					errmsg("server busy. please try a few sec later"),
-	book_has_own:					errmsg("the book has been owned by someone")
+	book_has_own:					errmsg("the book has been owned by someone"),
+	action_not_exist:				errmsg("the action does not exist or is timeout"),
+	failed_confirm:					errmsg("wrong confirm code"),
+	wrong_passwd:					errmsg("wrong password")
 };
 
 exports.debug = true;
 exports.session_timeout = 6000000; // 6000 sec
 exports.max_accr_amt = 4503599627370496; // (2 << 51), max_double / 2
+exports.action_timeout = 60000; // 60 sec
 
 /*
 	pop message and write error to response
@@ -67,7 +72,8 @@ exports.ensure = function (env, f, err_handler) {
 	try {
 		return f();
 	} catch (e) {
-		env.err(e);
+		if (env)
+			env.err(e);
 
 		if (err_handler) {
 			err_handler(function () {
