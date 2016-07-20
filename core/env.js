@@ -27,6 +27,7 @@ exports.Env = function (id, req, resp) {
 		buffer: [],
 		connect: [],
 		locked_book: [],
+		locked_contri: [],
 		closeAllDB: function () {
 			// TODO: probably need to close db with a little bit delay
 			// to temporarily cover some possible bugs in which the response is ended before
@@ -34,6 +35,8 @@ exports.Env = function (id, req, resp) {
 			for (var i = 0; i < this.connect.length; i++) {
 				this.connect[i].close();
 			}
+
+			this.connect = [];
 
 			return;
 		},
@@ -45,9 +48,9 @@ exports.Env = function (id, req, resp) {
 			this.buffer.push(text);
 			return;
 		},
-		sendValue: function (value) {
+		sendValue: function (value, status) {
 			this.writeRaw(JSON.stringify({
-				status: true,
+				status: status || 1,
 				value: value
 			}));
 			this.endResponse();
@@ -55,7 +58,7 @@ exports.Env = function (id, req, resp) {
 		},
 		sendError: function (msg, status) {
 			this.writeRaw(JSON.stringify({
-				status: false,
+				status: 0,
 				value: msg
 			}));
 			this.endResponse(status || 200);
@@ -127,16 +130,36 @@ exports.Env = function (id, req, resp) {
 			var ids = this.locked_book;
 			
 			for (var i = 0; i < ids.length; i++) {
-				bookm.unlockBook(this, ids[i], callback);
+				bookm.unlockBook(this, ids[i]);
 			}
+
+			this.locked_book = [];
+			callback();
+
+			return;
+		},
+		addLockedContri: function (id) {
+			this.locked_contri.push(id);
+			return;
+		},
+		unlockAllContri: function (callback) {
+			var ids = this.locked_contri;
+			
+			for (var i = 0; i < ids.length; i++) {
+				bookm.unlockContri(this, ids[i]);
+			}
+
+			this.locked_contri = [];
+			callback();
 
 			return;
 		},
 		clean: function () {
 			env = this;
 			this.unlockAllBook(function () {
-				env.closeAllDB();
-				env.connect = [];
+				env.unlockAllContri(function () {
+					env.closeAllDB();
+				});
 			});
 			return;
 		}

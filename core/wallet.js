@@ -290,14 +290,18 @@ function trans_state1(env, trans, trans_lst) {
 	return;
 }
 
+exports.isLegalValue = function (value) {
+	return typeof value == "number" &&
+		   value > 0 &&
+		   !isNaN(value) &&
+		   value < err.max_accr_amt;
+}
+
 // add new transaction to list
 exports.applyTransac = function (env, trans) {
 	// basic check on transaction
 
-	if (typeof trans.amt != "number" ||
-		trans.amt <= 0 ||
-		isNaN(trans.amt) ||
-		trans.amt >= err.max_accr_amt) {
+	if (!exports.isLegalValue(trans.amt)) {
 		return revertTransac(env, trans, "illegal_trans_amount");
 	}
 

@@ -7,6 +7,7 @@ exports.const = {
 	user_tab: "user_tab",
 	book_tab: "book_tab",
 	action_tab: "action_tab",
+	contri_tab: "contri_tab",
 	state: "state",
 	trans_lst: "trans_lst"
 };

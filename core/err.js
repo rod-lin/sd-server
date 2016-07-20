@@ -35,7 +35,12 @@ exports.code = {
 	book_has_own:					errmsg("the book has been owned by someone"),
 	action_not_exist:				errmsg("the action does not exist or is timeout"),
 	failed_confirm:					errmsg("wrong confirm code"),
-	wrong_passwd:					errmsg("wrong password")
+	wrong_passwd:					errmsg("wrong password"),
+	illegal_book_value:				errmsg("illegal book value"),
+	invalid_isbn:					errmsg("invalid ISBN"),
+	contri_req_limit:				errmsg("your contribute request limit has been reached"),
+	contri_overlap:					errmsg("you cannot contribute the same book twice(we assume that you don't have duplicated books)"),
+	contri_not_exist:				errmsg("the contribution does not exist")
 };
 
 exports.debug = true;

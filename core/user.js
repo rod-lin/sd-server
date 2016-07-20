@@ -191,7 +191,7 @@ exports.login = function (env, callback, session_id) {
 					} else if (user.level >= levels.admin
 							   || err.debug) {
 						// only users with level >= admin can log in
-						callback(user, col);
+						callback(env, user, col);
 					} else {
 						err.poperr(env, "no_auth");
 					}
@@ -223,7 +223,12 @@ function pushEmpty(arr, val) {
 // callback(new_env, user, col) {}
 exports.login_s = function (env, callback, session_id) {
 	// session verify first
-	return exports.login(env, function (user, col) {
+	if (err.debug) {
+		env.writeRaw("not safe: ");
+		return exports.login(env, callback, session_id);
+	}
+
+	return exports.login(env, function (env, user, col) {
 		db.col(env, db.const.action_tab,
 			err.callback(env, function (col) {
 				// create pending action
@@ -259,7 +264,7 @@ exports.login_s = function (env, callback, session_id) {
 						env.sendValue({
 							id: id,
 							check: crypto.aes_enc(confirm, user.passwd)
-						});
+						}, 2 /* use action */);
 					})
 				);
 			})
@@ -272,7 +277,7 @@ exports.IChangeName = function (env, arg) {
 		return;
 	}
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		col.findOneAndUpdate(
 			{ login: user.login },
 			{
@@ -290,7 +295,7 @@ exports.ITransfer = function (env, arg) {
 		return;
 	}
 
-	return exports.login(env, function (user, col) {
+	return exports.login_s(env, function (env, user, col) {
 		wallet.applyTransac(
 			env, wallet.Transaction(
 				arg.amt,
@@ -316,7 +321,7 @@ exports.IChangeBalance = function (env, arg) {
 		return;
 	}
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		if (user.level == levels.system) { // only system can change dollar without limit
 			col.findOneAndUpdate(
 				{ login: user.login },
@@ -337,7 +342,7 @@ exports.IChangeLevel = function (env, arg) {
 		return;
 	}
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		var to_level = parseInt(arg.level);
 		arg.user = arg.user || user.login;
 		// if no user specified, change own level
@@ -432,7 +437,7 @@ exports.IPutOnSale = function (env, arg) {
 
 	var book_id = parseInt(arg.book);
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		bookm.lockBook(env, book_id, function (env, book) {
 			if (user.private.indexOf(book_id) != -1) {
 				col.findOneAndUpdate(
@@ -460,7 +465,7 @@ exports.IRemovePubBook = function (env, arg) {
 
 	var book_id = parseInt(arg.book);
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		bookm.lockBook(env, book_id, function (env, book) {
 			if (user.public.indexOf(book_id) != -1) {
 				col.findOneAndUpdate(
@@ -496,7 +501,7 @@ exports.IAssignBook = function (env, arg) {
 			arg.list = "private";
 	}
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		if (user.level <= levels.repo) {
 			bookm.lockBook(env, book_id, function (env, book) {
 				col.count(
@@ -547,7 +552,7 @@ exports.IConfirmAction = function (env, arg) {
 			.toArray(err.callback(env, function (arr) {
 				if (arr.length) {
 					var action = arr[0];
-					exports.login(env, function (user, col) {
+					exports.login(env, function (env, user, col) {
 						if (action.confirm == arg.confirm) {
 							// confirmed -> call back
 							var cb = global.action_callback[action.callback];
@@ -573,7 +578,7 @@ exports.IPasswordConfirm = function (env, arg) {
 		return;
 	}
 
-	return exports.login(env, function (user, col) {
+	return exports.login(env, function (env, user, col) {
 		var confirm = crypto.aes_dec(arg.check, encryptPass(user.login, arg.passwd));
 
 		if (!confirm) {
