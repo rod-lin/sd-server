@@ -4,6 +4,7 @@
 
 var date	= require("./date.js");
 var bookm	= require('./book.js');
+var err		= require('./err.js');
 
 var common_header = {
 	"Content-Type": "text/json;charset=UTF-8"
@@ -162,6 +163,9 @@ exports.Env = function (id, req, resp) {
 				});
 			});
 			return;
+		},
+		callback: function (cb, err_handler) {
+			return err.callback(this, cb, err_handler);
 		}
 	};
 }

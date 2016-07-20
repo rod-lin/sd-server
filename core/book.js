@@ -8,6 +8,7 @@ var util	= require("./util.js");
 var wallet	= require("./wallet.js");
 var isbn	= require("./isbn.js");
 var user	= require("./user.js");
+var fm		= require("./file.js");
 
 exports.Book = function (id, isbn, name, value) {
 	return {
@@ -19,12 +20,13 @@ exports.Book = function (id, isbn, name, value) {
 	};
 }
 
-exports.ContributeRequest = function (id, isbn, login) {
+exports.ContributeRequest = function (id, isbn, login, cover) {
 	return {
 		_id: id,
 		locked: false,
 		user: login,
-		isbn: isbn
+		isbn: isbn,
+		cover: cover // file
 	};
 }
 
@@ -131,15 +133,23 @@ function getNewContriID(env, proc) {
 }
 
 // request for contribution
-exports.IContribute = function (env, arg) {
-	if (!util.checkArg(env, arg, [ "isbn" ])) {
+exports.IContribute = function (env, arg, file) {
+	if (!util.checkArg(env, arg, [ "isbn" ]) ||
+		!util.checkArg(env, file, [ "cover" ])) {
 		return;
 	}
 
 	var i13 = isbn.parseISBN(arg.isbn);
+	var cover = file.cover;
 
 	if (!i13) {
 		err.poperr(env, "invalid_isbn");
+		return;
+	}
+
+	if (!fm.checkType(cover, fm.types.image)) {
+		console.log(cover);
+		err.poperr(env, "expect_image_file");
 		return;
 	}
 
@@ -152,12 +162,14 @@ exports.IContribute = function (env, arg) {
 							col.count({ user: user.login, isbn: i13 },
 								err.callback(env, function (count) {
 									if (!count) {
-										getNewContriID(env, function (id) {
-											col.insert(exports.ContributeRequest(id, i13, user.login),
-												err.callback(env, function () {
-													env.sendValue(id);
-												})
-											);
+										fm.saveUpload(env, cover, function (file) {
+											getNewContriID(env, function (id) {
+												col.insert(exports.ContributeRequest(id, i13, user.login, file),
+													err.callback(env, function () {
+														env.sendValue(id);
+													})
+												);
+											});
 										});
 									} else {
 										err.poperr(env, "contri_overlap");
