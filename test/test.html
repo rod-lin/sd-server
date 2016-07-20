@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<script src="jquery.js"></script>
+	</head>
+	<body>
+		<script>
+			var form = new FormData();
+			var dat = {};
+			var cur = 0;
+
+			function e(id) {
+				return document.getElementById(id);
+			}
+
+			function n(name) {
+				return document.getElementsByName(name);
+			}
+
+			function removeElem(elem) {
+				var parent = elem.parentNode;
+				if(parent) {
+					parent.removeChild(elem);
+				}
+				return;
+			}
+
+			function refreshQuery() {
+				var query = e("query")
+
+				query.innerHTML = "";
+				for (var key in dat) {
+					if (dat[key]) {
+						query.innerHTML +=
+						"<br>&gt;" + key + ": " + dat[key].val +
+						"&nbsp;&nbsp;<button onclick=\"removeInput(" + dat[key].id + ")\">X</button>";
+					}
+				}
+
+				return;
+			}
+
+			function removeInput(id) {
+				var elem = e("__" + id);
+				if (elem) {
+					dat[elem.name] = undefined;
+					removeElem(elem);
+				}
+				refreshQuery();
+				return;
+			}
+
+			function addInput() {
+				var cloned = e("input_value").cloneNode();
+				var key = e("input_name").value;
+
+				if (!dat[key]) {
+					cloned.name = key;
+					cloned.id = "__" + cur;
+					$("#form").append(cloned);
+
+					dat[key] = { id: cur, val: e("input_value").value };
+					refreshQuery();
+					cur++;
+				}
+				
+				return;
+			}
+
+			function check_text() {
+				e("input_value").type = "text";
+				return;
+			}
+
+			function check_file() {
+				e("input_value").type = "file";
+				return;
+			}
+
+			function getValueOf(name)
+			{
+				var tmp = n(name);
+
+				for(var i = 0; i < tmp.length; i++) {
+					if(tmp[i].checked)
+						return tmp[i].value;
+				}
+
+				return null;
+			}
+
+			function submit() {
+				var intf = e("interface").value;
+				var method = getValueOf("input_met");
+				var form = e("form");
+
+				if (!intf.length) {
+					alert("interface not specified");
+					return;
+				}
+
+				if (!method) {
+					alert("no method specified");
+					return;
+				}
+
+				form.method = method
+				form.action = "http://localhost:8081/" + intf;
+				form.submit();
+			}
+		</script>
+		<form id="form" style="display: none" enctype="multipart/form-data"></form>
+		<h2>star-dollar api test</h2>
+		interface: <input id="interface" type="text" /><br><br>
+		method:
+			<input type="radio" name="input_met" checked="checked" value="POST" /> POST
+			<input type="radio" name="input_met" value="GET" /> GET
+			<br><br>
+		query: <span id="query"></span><br><br>
+			<div>
+				<span>
+					type:&nbsp;&nbsp;
+					<input id="input_t" type="radio" name="input_t" checked="checked" onclick="check_text()" /> text
+					<input id="input_t" type="radio" name="input_t" onclick="check_file()" /> file
+					<br>
+					key:&nbsp;&nbsp;&nbsp;&nbsp;<input id="input_name" type="text" /><br>
+					value:&nbsp;<input id="input_value" type="text" />
+				</span>
+				<button onclick="addInput()">add</button>
+			</div>
+		<br><br>
+		<button onclick="submit()">submit</button><br><br>
+	</body>
+</html>

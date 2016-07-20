@@ -1,5 +1,6 @@
-var url		= require("url");
-var qs		= require("querystring");
+var url			= require("url");
+var qs			= require("querystring");
+var multiparty	= require("multiparty");
 
 var user	= require("./core/user.js");
 var book	= require("./core/book.js");
@@ -54,25 +55,45 @@ exports.requestHandler = function (request, response) {
 		env, function () {
 			if (ifs[ifname[0]] &&
 				(intf = ifs[ifname[0]][ifname[1]])) {
-				function proc(query) {
-					var args = qs.parse(query);
-					env.log("interface handler " + ifname + " triggered");
+				function get_proc(args) {
+					env.log("interface handler " + ifname.join(".") + " triggered");
 					intf(env, args);
 				}
 
+				function post_proc(args, files) {
+					if (!files) return get_proc(args);
+					env.log("interface handler " + ifname.join(".") + " triggered");
+					intf(env, args, files);
+				}
+
 				if (request.method == "GET") {
-					proc(parsed.query);
+					get_proc(qs.parse(parsed.query));
 				} else if (request.method == "POST") {
-					var post_data = "";
+					var form = new multiparty.Form();
+					form.maxFilesSize = err.file_max_size;
 
-					// receive data
-					req.addListener("data", function (data) {
-						post_data += data;
+					var args = {}, files = null;
+
+					form
+					.on("error", function (e) {
+						env.err(e);
+						err.poperr(env, "failed_upload");
+						return;
+					})
+					.on("field", function (name, value) {
+						args[name] = value;
+						return;
+					})
+					.on("file", function (name, file) {
+						if (!files) files = {};
+						files[name] = file;
+						return;
+					})
+					.on("close", function () {
+						post_proc(args, files);
 					});
 
-					req.addListener("end", function () {
-						proc(post_data);
-					});
+					form.parse(request);
 				}
 			} else {
 				env.sendError(err.code.no_interface, 404);

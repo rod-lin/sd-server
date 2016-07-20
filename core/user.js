@@ -273,7 +273,7 @@ exports.login_s = function (env, callback, session_id) {
 }
 
 exports.IChangeName = function (env, arg) {
-	if (!util.checkArg(env, arg, [ "new" ])) {
+	if (!util.checkArg(env, arg, [ "new" ], [ "string" ])) {
 		return;
 	}
 

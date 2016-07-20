@@ -40,13 +40,15 @@ exports.code = {
 	invalid_isbn:					errmsg("invalid ISBN"),
 	contri_req_limit:				errmsg("your contribute request limit has been reached"),
 	contri_overlap:					errmsg("you cannot contribute the same book twice(we assume that you don't have duplicated books)"),
-	contri_not_exist:				errmsg("the contribution does not exist")
+	contri_not_exist:				errmsg("the contribution does not exist"),
+	failed_upload:					errmsg("failed to upload(is the file too large? 4MB is the maximum size)")
 };
 
 exports.debug = true;
 exports.session_timeout = 6000000; // 6000 sec
 exports.max_accr_amt = 4503599627370496; // (2 << 51), max_double / 2
 exports.action_timeout = 60000; // 60 sec
+exports.file_max_size = 4 * 1024 * 1024; // 4MB
 
 /*
 	pop message and write error to response
